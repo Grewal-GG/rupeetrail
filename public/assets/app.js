@@ -1,7 +1,7 @@
 'use strict';
 const $ = selector => document.querySelector(selector), form = $('#encounter-form');
 const DENOMINATIONS = [1,2,5,10,20,50,100,200,500,2000];
-let encounters = [], csrf = '', editing = null, sourceImage = null, worker = null, busy = false, ready = false, scanVersion = 0;
+let encounters = [], csrf = '', editing = null, busy = false, ready = false;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const key = row => JSON.stringify(['denomination','serial','series','year','inset','governor'].map(name => String(row[name] ?? '').trim().toUpperCase()));
 const money = value => '₹' + Number(value).toLocaleString('en-IN');
@@ -12,12 +12,7 @@ function localTime(value) {
 }
 const displayDate = value => new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'}).format(new Date(value));
 const detailText = row => [row.series,row.year,row.inset ? 'Inset '+row.inset : '',row.governor].filter(Boolean).join(' · ');
-const noteImage = denomination => DENOMINATIONS.includes(Number(denomination)) ? '<img class="note-image" src="assets/notes/'+Number(denomination)+'.jpg" alt="'+money(denomination)+' reference banknote" loading="lazy" width="100" height="48">' : '<span class="note-fallback">'+esc(money(denomination))+'</span>';
-document.addEventListener('error', event => {
- if(event.target.matches?.('.note-image')) {
-  const fallback = document.createElement('span'); fallback.className='note-fallback'; fallback.textContent=event.target.alt.replace(' reference banknote',''); event.target.replaceWith(fallback);
- }
-}, true);
+const noteImage = denomination => window.NoteFaces.render(denomination);
 function groups() {
  const map = new Map();
  for(const row of encounters) { const k=key(row); if(!map.has(k))map.set(k,[]); map.get(k).push(row); }
@@ -69,16 +64,18 @@ function match() {
  $('#match').textContent=rows.length?'This serial has '+rows.length+' previous encounter(s). Check the extra details if these are different notes.':'';
 }
 form.addEventListener('input',event=>{
- if(['serial','denomination'].includes(event.target.name))$('#confirmed').checked=false;
  match();
 });
 function rememberedDenomination() {try {const value=localStorage.getItem('rupeetrail-denomination');return DENOMINATIONS.includes(Number(value))?value:'100';}catch{return '100';}}
 function resetForm() {
- scanVersion++; editing=null; form.reset(); form.elements.denomination.value=rememberedDenomination(); form.elements.seen_at.value=localTime(new Date());
- $('#save').textContent='Save encounter'; $('#form-title').textContent='Add encounter'; $('#cancel-edit').hidden=true;
- $('#preview').hidden=true; $('#crop-tools').hidden=true; $('#candidates').replaceChildren(); $('#confirm-row').hidden=true; $('#confirmed').required=false;
- $('#scan-status').textContent='Choose a clear photo of one serial panel. Photos stay on this device.'; $('#scanner').open=false; $('#identity').open=false; $('#form-status').textContent=''; sourceImage=null; match();
+ editing=null; form.reset(); form.elements.denomination.value=rememberedDenomination(); form.elements.seen_at.value=localTime(new Date());
+ $('#save').textContent='Save encounter'; $('#form-title').textContent='Add encounter'; $('#cancel-edit').hidden=true; $('#identity').open=false; $('#form-status').textContent='';match();
 }
+document.addEventListener('rupeetrail:scan-complete',event=>{
+ if(busy)return;
+ for(const name of ['denomination','serial','year','series','inset','governor'])form.elements[name].value=event.detail[name]||'';
+ $('#identity').open=!!detailText(event.detail);$('#form-status').textContent='Scanned details added. Add a context if needed, then save.';match();form.elements.context.focus();
+});
 form.addEventListener('submit',async event=>{
  event.preventDefault(); if(busy||!ready)return; busy=true; $('#save').disabled=true; form.setAttribute('aria-busy','true');
  try {
@@ -131,21 +128,6 @@ $('#reload').onclick=async()=>{
  try{await refresh();}catch(error){$('#load-status').textContent=error.message+' Press Refresh to retry.';}
  finally{button.disabled=false;}
 };
-
-let scannerLoading=null;
-function loadScanner(){
- if(window.Tesseract)return Promise.resolve();
- if(!scannerLoading)scannerLoading=new Promise((resolve,reject)=>{
-  const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.min.js';
-  script.onload=()=>resolve();script.onerror=()=>{script.remove();scannerLoading=null;reject(Error('Scanner unavailable. Check internet access or enter the serial manually.'));};document.head.append(script);
- });
- return scannerLoading;
-}
-function cropRect(){const width=sourceImage.width,height=sourceImage.height,h=height*Number($('#crop-h').value)/100;return {x:0,y:(height-h)*Number($('#crop-y').value)/100,w:width,h}}
-function drawPreview(){if(!sourceImage)return;const canvas=$('#preview'),scale=Math.min(1,1000/sourceImage.width);canvas.width=Math.round(sourceImage.width*scale);canvas.height=Math.round(sourceImage.height*scale);const ctx=canvas.getContext('2d');ctx.drawImage(sourceImage,0,0,canvas.width,canvas.height);const rect=cropRect();ctx.fillStyle='#20231e99';ctx.fillRect(0,0,canvas.width,rect.y*scale);ctx.fillRect(0,(rect.y+rect.h)*scale,canvas.width,canvas.height-(rect.y+rect.h)*scale);ctx.strokeStyle='#e9f16c';ctx.lineWidth=3;ctx.strokeRect(1,rect.y*scale,canvas.width-2,rect.h*scale)}
-$('#photo').addEventListener('change',async event=>{const file=event.target.files[0];if(!file)return;scanVersion++;sourceImage=null;$('#preview').hidden=true;$('#crop-tools').hidden=true;$('#confirmed').checked=false;$('#candidates').replaceChildren();if(file.size>20*1024*1024){$('#scan-status').textContent='Choose an image smaller than 20 MB.';return}const url=URL.createObjectURL(file);try{const image=new Image();image.src=url;await image.decode();const scale=Math.min(1,2400/Math.max(image.width,image.height));sourceImage=document.createElement('canvas');sourceImage.width=Math.round(image.width*scale);sourceImage.height=Math.round(image.height*scale);sourceImage.getContext('2d').drawImage(image,0,0,sourceImage.width,sourceImage.height);$('#preview').hidden=false;$('#crop-tools').hidden=false;$('#crop-h').value=35;$('#crop-y').value=50;drawPreview();$('#scan-status').textContent='Move the highlighted strip over ONE serial panel, then read it.'}catch{$('#scan-status').textContent='Could not open this photo. Try a JPG or PNG.'}finally{URL.revokeObjectURL(url)}});
-for(const id of ['crop-y','crop-h'])$('#'+id).oninput=drawPreview;
-$('#recognize').onclick=async()=>{if(!sourceImage)return;const version=scanVersion;const button=$('#recognize');button.disabled=true;$('#confirmed').checked=false;try{$('#scan-status').textContent='Loading scanner; the first run can take a little longer…';await loadScanner();worker??=await Tesseract.createWorker('eng',1,{logger:m=>{if(m.status==='recognizing text')$('#scan-status').textContent='Reading serial… '+Math.round(m.progress*100)+'%'}});await worker.setParameters({tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789* ',tessedit_pageseg_mode:'7'});const r=cropRect(),canvas=document.createElement('canvas');canvas.width=1600;canvas.height=Math.max(1,Math.round(r.h/r.w*1600));canvas.getContext('2d').drawImage(sourceImage,r.x,r.y,r.w,r.h,0,0,canvas.width,canvas.height);const result=await worker.recognize(canvas);if(version!==scanVersion)return;const raw=result.data.text.toUpperCase();const candidates=[...new Set((raw.match(/[A-Z0-9*][A-Z0-9* \t]{4,20}[A-Z0-9*]/g)||[]).map(s=>s.replace(/\s/g,'')).filter(s=>s.length>=6&&s.length<=16))];$('#candidates').replaceChildren();for(const serial of candidates){const b=document.createElement('button');b.type='button';b.textContent=serial;b.onclick=()=>{form.elements.serial.value=serial;$('#confirmed').checked=false;match()};$('#candidates').append(b)}if(candidates.length){$('#confirm-row').hidden=false;$('#confirmed').required=true;}if(candidates.length===1)form.elements.serial.value=candidates[0];$('#scan-status').textContent=candidates.length?'Read complete. Check every character against the note, including prefix, zeros and any star.':'No reliable serial found. Reposition the panel, retake the photo, or enter it manually.';match()}catch(error){$('#scan-status').textContent=error.message;try{await worker?.terminate()}catch{}worker=null}finally{button.disabled=false}};
 
 resetForm();
 refresh().catch(error=>{

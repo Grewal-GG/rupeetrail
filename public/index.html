@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f4f2e9">
-<title>RupeeTrail — Dashboard</title><link rel="stylesheet" href="assets/style.css"><script defer src="assets/app.js"></script>
+<title>RupeeTrail — Dashboard</title><link rel="stylesheet" href="assets/style.css"><script defer src="assets/note-faces.js"></script><script defer src="assets/app.js"></script><script type="module" src="assets/scanner.mjs"></script>
 </head>
 <body>
 <a class="skip" href="#scan">Skip to add encounter</a>
@@ -19,18 +19,14 @@
 <div class="workspace">
 <section id="scan" class="panel">
 <div class="section-head"><h2 id="form-title">Add encounter</h2><span class="muted">Quick entry</span></div>
-<form id="encounter-form">
+<div class="scan-entry"><button type="button" id="open-scanner" class="scan-button"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8 5 10 2h4l2 3h4v16H4V5z" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Scan a note</button><span>Front → back → review</span></div><form id="encounter-form">
 <div class="fields"><label>Denomination<select name="denomination" required><option value="10">₹10</option><option value="20">₹20</option><option value="50">₹50</option><option value="100" selected>₹100</option><option value="200">₹200</option><option value="500">₹500</option><option value="2000">₹2,000</option><option value="1">₹1</option><option value="2">₹2</option><option value="5">₹5</option></select></label>
 <label>Serial number + prefix<input name="serial" placeholder="0AB001234" maxlength="16" required autocomplete="off" spellcheck="false" autocapitalize="characters" pattern="[A-Za-z0-9*\s]{6,24}"><small>Include the prefix, leading zeros and any star.</small></label>
 <label>Date &amp; time <span class="muted">(IST)</span><input name="seen_at" type="datetime-local" required></label>
 <label>Context <span class="muted">(optional)</span><input name="context" maxlength="500" placeholder="Where or how you received it"></label></div>
-<details id="scanner"><summary>Scan serial from a photo</summary><div class="scan-box">
-<label for="photo">Take photo / choose image</label><input id="photo" type="file" accept="image/*" capture="environment">
-<canvas id="preview" hidden></canvas><div id="crop-tools" hidden><label for="crop-y">Serial panel position</label><input id="crop-y" type="range" min="0" max="100" value="50"><label for="crop-h">Panel height</label><input id="crop-h" type="range" min="10" max="100" value="35"><button type="button" id="recognize">Read selected panel</button></div>
-<p id="scan-status" role="status">Choose a clear photo of one serial panel. Photos stay on this device.</p><div id="candidates"></div></div></details>
 <details id="identity"><summary>More note details</summary><p class="fine">Fill these consistently to distinguish notes with the same serial.</p><div class="fields"><label>Design / series<input name="series" maxlength="80" placeholder="e.g. Mahatma Gandhi New Series"></label><label>Printing year<input name="year" maxlength="4" inputmode="numeric" pattern="(19|20)[0-9]{2}" placeholder="2024"></label><label>Inset letter<input name="inset" maxlength="8"></label><label>Governor signature<input name="governor" maxlength="80"></label></div></details>
 <p id="match" class="match" aria-live="polite"></p>
-<label id="confirm-row" class="confirm" hidden><input type="checkbox" id="confirmed">I checked the scanned serial against the note.</label>
+
 <div class="form-actions"><button class="primary" id="save" type="submit" disabled>Save encounter</button><button type="button" id="cancel-edit" hidden>Cancel edit</button></div>
 <p id="form-status" role="status"></p>
 </form>
@@ -43,8 +39,32 @@
 <p id="filter-status" class="fine" role="status"></p>
 <p class="table-hint">Scroll sideways to see all columns.</p>
 <div class="table-scroll" tabindex="0" role="region" aria-label="Saved notes table"><table><caption class="sr-only">Recorded notes, grouped by denomination, serial and extra identity details.</caption><thead><tr><th scope="col">Note</th><th scope="col">Serial &amp; details</th><th scope="col">Encounters</th><th scope="col">First seen</th><th scope="col">Last seen</th><th scope="col">Latest context</th><th scope="col">Actions</th></tr></thead><tbody id="entries"><tr><td colspan="7" class="empty">Loading your notes…</td></tr></tbody></table></div>
-<p class="table-note">Images are denomination references. Matches use the identity details you record.</p>
+<p class="table-note">Hover or tap a note to see the back. Images are denomination references.</p>
 </section>
 </main>
 <dialog id="history" aria-labelledby="history-title"><div class="section-head"><h2 id="history-title">Encounter history</h2><button id="close-history" type="button">Close</button></div><div id="history-content"></div></dialog>
+<dialog id="note-scanner" aria-labelledby="scanner-title" aria-describedby="scanner-privacy">
+<div class="section-head"><div><p class="eyebrow">GUIDED CAPTURE</p><h2 id="scanner-title">Scan a note</h2></div><button id="scanner-close" type="button">Close</button></div>
+<ol class="scan-steps" aria-label="Scan progress"><li data-step="front" aria-current="step"><span>1</span>Front</li><li data-step="back"><span>2</span>Back</li><li data-step="review"><span>3</span>Review</li></ol>
+<section id="capture-panel" aria-labelledby="capture-title">
+<h3 id="capture-title">Scan the front</h3><p id="capture-description">Keep the entire note upright inside the frame. The serial and denomination are on this side.</p>
+<div id="camera-stage" class="camera-stage"><video id="camera-video" autoplay muted playsinline hidden></video><canvas id="photo-stage" hidden></canvas><p id="camera-placeholder">Start the camera or choose a photo.</p><div id="note-guide" class="note-guide" hidden><span>Fit the whole note here</span></div></div>
+<p id="capture-quality" class="capture-quality" role="status"></p>
+<div id="camera-options" class="camera-options" hidden><button id="switch-camera" type="button">Switch camera</button><button id="camera-light" type="button" hidden aria-pressed="false">Light</button><label id="zoom-label" hidden>Zoom<input id="camera-zoom" type="range"></label><label class="check-inline"><input id="auto-capture" type="checkbox">Auto capture when steady</label></div>
+<div id="capture-controls" class="capture-controls"><button type="button" id="camera-start">Start camera</button><button type="button" id="choose-scan-photo">Choose photo</button><input id="scan-photo" type="file" accept="image/*" hidden><button id="rotate-photo" type="button" hidden>Rotate photo</button><button class="primary" type="button" id="capture-note" disabled>Capture front</button></div>
+<div class="scan-navigation"><button id="retake-front" type="button" hidden>Retake front</button><button id="skip-back" type="button" hidden>Skip back</button></div>
+<p id="capture-status" role="status"></p>
+</section>
+<section id="review-panel" aria-labelledby="review-title" hidden>
+<h3 id="review-title">Check the readings</h3><p id="review-summary"></p>
+<div class="review-photo"><canvas id="review-image" aria-label="Captured note photo"></canvas><div><button id="show-front" type="button" aria-pressed="true">Front photo</button><button id="show-back" type="button" aria-pressed="false">Back photo</button></div></div>
+<div id="serial-choices" class="serial-choices"></div>
+<form id="review-form"><div class="fields"><label>Denomination<select id="review-denomination" required><option value="">Choose denomination</option><option value="1">₹1</option><option value="2">₹2</option><option value="5">₹5</option><option value="10">₹10</option><option value="20">₹20</option><option value="50">₹50</option><option value="100">₹100</option><option value="200">₹200</option><option value="500">₹500</option><option value="2000">₹2,000</option></select></label><label>Serial + prefix<input id="review-serial" required minlength="6" maxlength="16" pattern="[A-Za-z0-9*]{6,16}" autocomplete="off" spellcheck="false" autocapitalize="characters"></label><label>Printing year<input id="review-year" maxlength="4" inputmode="numeric" pattern="(19|20)[0-9]{2}" placeholder="If visible on the back"></label><label>Design / series<input id="review-series" maxlength="80"></label><label>Inset letter<input id="review-inset" maxlength="8" placeholder="Check by eye"></label><label>Governor signature<input id="review-governor" maxlength="80" placeholder="Check by eye"></label></div>
+<p class="fine">Check every character, including leading zeros and any star. Signature and inset letters usually need checking by eye.</p>
+<label class="confirm"><input id="review-check" type="checkbox" required>I checked the serial, denomination and any extra details against this note.</label>
+<div class="form-actions"><button type="button" id="review-retake">Retake front</button><button class="primary" type="submit">Use these details</button></div></form>
+<details><summary>OCR text</summary><pre id="ocr-evidence"></pre></details>
+</section>
+<p id="scanner-privacy" class="privacy-note">Photos are processed on this device and discarded when you close the scanner. First use downloads the OCR engine.</p>
+</dialog>
 </body></html>
