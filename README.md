@@ -10,7 +10,7 @@ cd rupeetrail
 docker compose up -d --build
 ```
 
-The app binds to localhost port 8087, deliberately not every server interface. Put your existing HTTPS reverse proxy in front of `http://127.0.0.1:8087`, reachable only through your private access setup. If the proxy runs inside Docker, connect the containers on a shared network and proxy to `app:80` instead. Do not publish the unauthenticated app to the public internet. Browser camera behaviour is best over HTTPS; the file chooser can also select existing images. This release uses the native photo chooser with rear-camera capture hint, not a continuous video scanner.
+The app binds to localhost port 8087, deliberately not every server interface. Put your existing HTTPS reverse proxy in front of `http://127.0.0.1:8087`, reachable only through your private access setup. If the proxy runs inside Docker, connect the containers on a shared network and proxy to `app:80` instead. Do not publish the unauthenticated app to the public internet. The in-page live camera requires HTTPS or localhost. The photo chooser remains available when live camera access is unavailable.
 
 For LAN-only access, change the port binding to `YOUR_SERVER_LAN_IP:8087:80`. Anyone with network access to that address can read, edit or delete data. A firewall or private tunnel is the access boundary; CSRF protection is not authentication.
 
@@ -26,7 +26,11 @@ Open http://127.0.0.1:8087. Never open index.html directly for real use. The dat
 
 ## Scan a note
 
-Choose the denomination, photograph one serial panel, move the crop strip over the number, and click Read selected panel. Check the complete serial including prefix, leading zeros and star. Correct OCR mistakes before checking the confirmation box and saving. No photograph is sent to this app's server or stored in the database. OCR runs using Tesseract.js in your browser. The scanner engine/model downloads need internet on first use. Offline support is not included.
+Click **Scan a note**, allow camera access, and place the whole front inside the guide. The preview checks brightness, glare, sharpness and movement. Capture the front, then turn the same note over and capture the back. Optional auto-capture waits for several stable frames; it switches off after the front so you have time to turn the note over. Camera switching, torch and zoom appear when the device supports them. You can also choose a photo for each side and rotate it before reading, or skip the back.
+
+The front is read in multiple passes to find serial candidates and the denomination. The back can suggest a printing year and series from recognizable motif text. Governor and inset are manual fields. Conflicting readings stay blank; leading O/0 alternatives are explicitly labelled suggestions and never selected automatically. Check the complete serial, including prefix, leading zeros and star, and correct every field before checking the review confirmation box. **Use these details** fills the encounter form; **Save encounter** records it.
+
+No photograph or raw OCR text is sent to this app's server or stored in the database. Captures are discarded when the scanner closes and the camera stops during review or when the page is hidden. OCR runs using Tesseract.js in your browser. The scanner engine/model downloads need internet on first use. Manual entry remains available if camera access or OCR fails. Offline support is not included.
 
 RBI says serial numbers can repeat across notes with a different inset letter, printing year or governor signature. Matching here uses denomination + serial + optional series/year/inset/governor. Blank identity fields create provisional matches. Fill them consistently; adding them later may split a previously grouped identity. OCR is an aid, not guaranteed identification. This does not detect counterfeit notes or track where a note travelled. Statistics refer to recorded identities and sightings, not verified circulation or possession.
 
@@ -63,15 +67,16 @@ Restore: stop the app, keep a copy of current data, replace the database in the 
 ```sh
 php tests/validation.php
 node --check public/assets/app.js
+node --test tests/scan-utils.test.mjs
 ```
 
 ## Dashboard
 
 The app opens directly to totals, quick encounter entry, a denomination breakdown and a searchable, sortable notes table. Manual entry requires denomination, full serial and encounter time (defaults to now in IST); context and identity details are optional. “Add again” copies a saved note’s identity and context with a new encounter time. Editing and deleting remain available in encounter history. Filters affect the table, while dashboard totals always cover all records. Recorded note value counts each identity once; it is not a cash balance.
 
-Reference banknote thumbnails are bundled locally from the [RBI museum](https://www.rbi.org.in/Scripts/pm_republicindia.aspx). They represent denominations, not photographs of your saved notes or an automatic identification of their series. Source URLs are in `public/assets/notes/SOURCES.md`.
+Reference banknote thumbnails are bundled locally from the [RBI museum](https://www.rbi.org.in/Scripts/pm_republicindia.aspx). Only the front is shown initially; hover to see the back, or tap/click/press Enter to switch sides. SVG viewports isolate the two faces from each original photograph and preserve its proportions. These embed raster photographs, so SVG does not invent additional image detail. They represent denominations, not photographs of your saved notes or an automatic identification of their series. Source URLs are in `public/assets/notes/SOURCES.md`.
 
-The interface uses system fonts and no animation library. Tesseract.js 6.0.1 loads only when you click Read selected panel. Scanner engine/model downloads require internet; manual entry and bundled thumbnails do not. Third-party libraries retain their own licenses.
+The interface uses system fonts, comfortable input sizes, responsive layouts and automatic reduced-motion support. Tesseract.js 6.0.1 loads only when reading a captured or chosen photo. Scanner engine/model downloads require internet; manual entry and bundled thumbnails do not. Third-party libraries retain their own licenses. Browser checks cover 320, 768, 1024 and 1440 pixel layouts, a virtual camera, permission/download failures and real OCR on labelled synthetic fixtures. Physical phone cameras and production deployment still require device-specific checks.
 
 ## Next releases
 
