@@ -26,7 +26,7 @@ Open http://127.0.0.1:8087. Never open index.html directly for real use. The dat
 
 ## Scan a note
 
-Choose the denomination, photograph one serial panel, move the crop strip over the number, and click Read selected panel. Check the complete serial including prefix, leading zeros and star. Correct OCR mistakes before checking the confirmation box and saving. No photograph is sent to this app's server or stored in the database. OCR runs using Tesseract.js in your browser. The initial scanner engine/model downloads need internet; CDN scripts and fonts also make external requests. Offline support is not included.
+Choose the denomination, photograph one serial panel, move the crop strip over the number, and click Read selected panel. Check the complete serial including prefix, leading zeros and star. Correct OCR mistakes before checking the confirmation box and saving. No photograph is sent to this app's server or stored in the database. OCR runs using Tesseract.js in your browser. The scanner engine/model downloads need internet on first use. Offline support is not included.
 
 RBI says serial numbers can repeat across notes with a different inset letter, printing year or governor signature. Matching here uses denomination + serial + optional series/year/inset/governor. Blank identity fields create provisional matches. Fill them consistently; adding them later may split a previously grouped identity. OCR is an aid, not guaranteed identification. This does not detect counterfeit notes or track where a note travelled. Statistics refer to recorded identities and sightings, not verified circulation or possession.
 
@@ -65,9 +65,13 @@ php tests/validation.php
 node --check public/assets/app.js
 ```
 
-## Design and dependencies
+## Dashboard
 
-Original warm-paper interface, forest-green abstract note graphic and yellow action buttons. Geist font with system fallback. GSAP entrance and scroll reveal respect reduced motion. Pinned CDN versions: GSAP 3.12.5 and Tesseract.js 6.0.1. Third-party libraries retain their own licenses. Details references were unavailable due to a paid-plan access error; no Details resource was copied.
+The app opens directly to totals, quick encounter entry, a denomination breakdown and a searchable, sortable notes table. Manual entry requires denomination, full serial and encounter time (defaults to now in IST); context and identity details are optional. “Add again” copies a saved note’s identity and context with a new encounter time. Editing and deleting remain available in encounter history. Filters affect the table, while dashboard totals always cover all records. Recorded note value counts each identity once; it is not a cash balance.
+
+Reference banknote thumbnails are bundled locally from the [RBI museum](https://www.rbi.org.in/Scripts/pm_republicindia.aspx). They represent denominations, not photographs of your saved notes or an automatic identification of their series. Source URLs are in `public/assets/notes/SOURCES.md`.
+
+The interface uses system fonts and no animation library. Tesseract.js 6.0.1 loads only when you click Read selected panel. Scanner engine/model downloads require internet; manual entry and bundled thumbnails do not. Third-party libraries retain their own licenses.
 
 ## Next releases
 
