@@ -5,7 +5,7 @@ A private, single-user banknote encounter journal. PHP + SQLite, camera/photo OC
 ## Run on Ubuntu with Docker
 
 ```sh
-git clone YOUR_REPOSITORY_URL rupeetrail
+git clone https://github.com/Grewal-GG/rupeetrail rupeetrail
 cd rupeetrail
 docker compose up -d --build
 ```
